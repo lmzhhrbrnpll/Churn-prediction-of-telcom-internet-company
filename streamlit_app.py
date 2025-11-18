@@ -56,14 +56,14 @@ def preprocess_data(df):
 
     return df_ml
 
-# --- MODEL TRAINING WITH LIGHTGBM AND SMOTE ---
+# --- SIMPLIFIED MODEL TRAINING ---
 @st.cache_resource
-def train_lightgbm_model(df_ml):
-    """Train LightGBM model with hyperparameter tuning and SMOTE."""
-
+def train_simple_lightgbm(_df_ml):
+    """Train LightGBM model with simplified parameters for faster training."""
+    
     # Prepare features and target
-    X = df_ml.drop('churn_value', axis=1)
-    y = df_ml['churn_value']
+    X = _df_ml.drop('churn_value', axis=1)
+    y = _df_ml['churn_value']
 
     # Split the data (80-20 split)
     X_train, X_test, y_train, y_test = train_test_split(
@@ -79,34 +79,21 @@ def train_lightgbm_model(df_ml):
     X_train_scaled = scaler.fit_transform(X_train_resampled)
     X_test_scaled = scaler.transform(X_test)
 
-    # LightGBM hyperparameter tuning
-    param_grid = {
-        'n_estimators': [100, 200, 300],
-        'max_depth': [3, 5, 7, -1],
-        'learning_rate': [0.01, 0.05, 0.1],
-        'num_leaves': [31, 50, 100],
-        'subsample': [0.8, 0.9, 1.0],
-        'colsample_bytree': [0.8, 0.9, 1.0],
-        'reg_alpha': [0, 0.1, 0.5],
-        'reg_lambda': [0, 0.1, 0.5]
-    }
-
-    lgb_model = lgb.LGBMClassifier(random_state=42, verbose=-1)
-
-    # Use Stratified K-Fold for cross-validation
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
-    grid_search = GridSearchCV(
-        lgb_model, param_grid, cv=cv, scoring='roc_auc', n_jobs=-1, verbose=0
+    # Use simpler LightGBM parameters for faster training
+    lgb_model = lgb.LGBMClassifier(
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        random_state=42,
+        verbose=-1
     )
 
-    grid_search.fit(X_train_scaled, y_train_resampled)
-
-    best_model = grid_search.best_estimator_
+    # Fit the model
+    lgb_model.fit(X_train_scaled, y_train_resampled)
 
     # Make predictions
-    y_pred = best_model.predict(X_test_scaled)
-    y_pred_proba = best_model.predict_proba(X_test_scaled)[:, 1]
+    y_pred = lgb_model.predict(X_test_scaled)
+    y_pred_proba = lgb_model.predict_proba(X_test_scaled)[:, 1]
 
     # Calculate metrics
     accuracy = accuracy_score(y_test, y_pred)
@@ -123,8 +110,14 @@ def train_lightgbm_model(df_ml):
         'auc_score': auc_score
     }
 
-    return (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-            y_pred, y_pred_proba, grid_search.best_params_, metrics)
+    best_params = {
+        'n_estimators': 100,
+        'max_depth': 6,
+        'learning_rate': 0.1
+    }
+
+    return (lgb_model, scaler, smote, X_train, X_test, y_train, y_test,
+            y_pred, y_pred_proba, best_params, metrics)
 
 # --- GET IMPORTANT FEATURES ---
 def get_important_features(model, feature_names, top_n=15):
@@ -138,7 +131,7 @@ def get_important_features(model, feature_names, top_n=15):
 
 # --- MAIN APP ---
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
-st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
+st.markdown("**Model: LightGBM with SMOTE**")
 
 # Create tabs for Data Overview and Prediction
 tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model"])
@@ -149,7 +142,6 @@ with tab1:
     This application performs data overview on the preprocessed Customer Churn dataset.
     Use the filters in the sidebar to explore customer behavior and churn patterns.
     """)
-
 
     # --- SIDEBAR FOR FILTERS ---
     st.sidebar.header("Filter Customers")
@@ -220,7 +212,6 @@ with tab1:
                 st.metric(label=f"Avg. {col}", value=avg_value)
 
         st.markdown("---")
-
         
         # --- DATA SUMMARY ---
         st.subheader("📋 Data Summary")
@@ -255,7 +246,6 @@ with tab1:
             st.subheader("Basic Statistics")
             st.dataframe(df.describe())
 
-
         # --- DISPLAY RAW DATA ---
         with st.expander("View Filtered Data"):
             st.dataframe(df_selection)
@@ -265,7 +255,7 @@ with tab2:
     # --- CHURN PREDICTION MODEL ---
     st.header("🤖 Customer Churn Prediction Model")
     st.markdown("""
-    This section uses a tuned LightGBM classifier with SMOTE to handle class imbalance for customer churn prediction.
+    This section uses a LightGBM classifier with SMOTE to handle class imbalance for customer churn prediction.
     Target variable: **churn_value**
     """)
 
@@ -278,12 +268,49 @@ with tab2:
         st.write("**Class Distribution:**")
         st.write(df_ml['churn_value'].value_counts())
 
-    # Train model
-    with st.spinner("Training LightGBM model with SMOTE and hyperparameter tuning..."):
-        (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-         y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model(df_ml)
+    # Add a button to train the model
+    if 'model_trained' not in st.session_state:
+        st.session_state.model_trained = False
 
-    st.success("Model training completed!")
+    if not st.session_state.model_trained:
+        if st.button("🚀 Train Model", type="primary"):
+            with st.spinner("Training LightGBM model with SMOTE..."):
+                try:
+                    (best_model, scaler, smote, X_train, X_test, y_train, y_test,
+                     y_pred, y_pred_proba, best_params, metrics) = train_simple_lightgbm(df_ml)
+                    
+                    # Store in session state
+                    st.session_state.update({
+                        'best_model': best_model,
+                        'scaler': scaler,
+                        'X_train': X_train,
+                        'X_test': X_test,
+                        'y_train': y_train,
+                        'y_test': y_test,
+                        'y_pred': y_pred,
+                        'y_pred_proba': y_pred_proba,
+                        'best_params': best_params,
+                        'metrics': metrics,
+                        'model_trained': True
+                    })
+                    st.success("Model training completed!")
+                except Exception as e:
+                    st.error(f"Error during model training: {str(e)}")
+        else:
+            st.info("Click the button above to train the model.")
+            st.stop()
+    else:
+        # Load from session state
+        best_model = st.session_state.best_model
+        scaler = st.session_state.scaler
+        X_train = st.session_state.X_train
+        X_test = st.session_state.X_test
+        y_train = st.session_state.y_train
+        y_test = st.session_state.y_test
+        y_pred = st.session_state.y_pred
+        y_pred_proba = st.session_state.y_pred_proba
+        best_params = st.session_state.best_params
+        metrics = st.session_state.metrics
 
     # Display model performance
     st.subheader("📊 Model Performance")
@@ -318,11 +345,11 @@ with tab2:
         st.metric("Features", X_train.shape[1])
 
     # Display best parameters
-    st.subheader("⚙️ Best Hyperparameters")
+    st.subheader("⚙️ Model Parameters")
     st.json(best_params)
 
     # Get important features for prediction form
-    important_features = get_important_features(best_model, X_train.columns.tolist(), top_n=15)
+    important_features = get_important_features(best_model, X_train.columns.tolist(), top_n=12)
     
     # Display important features info
     with st.expander("📋 Important Features for Prediction"):
@@ -341,14 +368,13 @@ with tab2:
     with st.form("prediction_form"):
         st.write("### Customer Details (Important Features Only)")
         
-        # Group important features into categories for better organization
         input_data = {}
         
-        # Demographics and Basic Info
-        st.write("#### 📊 Demographics & Basic Information")
-        demo_col1, demo_col2 = st.columns(2)
+        # Organize features into categories
+        st.write("#### 📊 Customer Information")
+        info_col1, info_col2 = st.columns(2)
         
-        with demo_col1:
+        with info_col1:
             if 'age' in important_features:
                 min_val = float(df['age'].min())
                 max_val = float(df['age'].max())
@@ -360,33 +386,6 @@ with tab2:
                     value=default_val
                 )
             
-            if 'gender' in important_features:
-                input_data['gender'] = st.selectbox(
-                    "Gender",
-                    options=[0, 1],
-                    format_func=lambda x: "Female" if x == 0 else "Male"
-                )
-                
-        with demo_col2:
-            if 'senior_citizen' in important_features:
-                input_data['senior_citizen'] = st.selectbox(
-                    "Senior Citizen",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-            
-            if 'dependents' in important_features:
-                input_data['dependents'] = st.selectbox(
-                    "Has Dependents",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-
-        # Service Usage
-        st.write("#### 📞 Service Usage")
-        service_col1, service_col2 = st.columns(2)
-        
-        with service_col1:
             if 'tenure' in important_features:
                 min_val = float(df['tenure'].min())
                 max_val = float(df['tenure'].max())
@@ -397,7 +396,8 @@ with tab2:
                     max_value=max_val,
                     value=default_val
                 )
-            
+                
+        with info_col2:
             if 'monthly_charges' in important_features:
                 min_val = float(df['monthly_charges'].min())
                 max_val = float(df['monthly_charges'].max())
@@ -406,106 +406,60 @@ with tab2:
                     "Monthly Charges",
                     min_value=min_val,
                     max_value=max_val,
-                    value=default_val
+                    value=default_val,
+                    step=1.0
+                )
+
+        st.write("#### 🔧 Service Features")
+        service_col1, service_col2 = st.columns(2)
+        
+        with service_col1:
+            # Binary features
+            binary_features = [f for f in important_features if f in ['online_security', 'online_backup', 'device_protection', 
+                                                                     'premium_tech_support', 'streaming_tv', 'streaming_movies',
+                                                                     'paperless_billing', 'multiple_lines', 'unlimited_data']]
+            
+            for feature in binary_features[:4]:  # Show first 4
+                input_data[feature] = st.selectbox(
+                    feature.replace('_', ' ').title(),
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
                 )
                 
         with service_col2:
-            if 'avg_monthly_long_distance_charges' in important_features:
-                min_val = float(df['avg_monthly_long_distance_charges'].min())
-                max_val = float(df['avg_monthly_long_distance_charges'].max())
-                default_val = float(df['avg_monthly_long_distance_charges'].median())
-                input_data['avg_monthly_long_distance_charges'] = st.slider(
-                    "Avg Monthly Long Distance Charges",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-            
-            if 'avg_monthly_gb_download' in important_features:
-                min_val = float(df['avg_monthly_gb_download'].min())
-                max_val = float(df['avg_monthly_gb_download'].max())
-                default_val = float(df['avg_monthly_gb_download'].median())
-                input_data['avg_monthly_gb_download'] = st.slider(
-                    "Avg Monthly GB Download",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
+            for feature in binary_features[4:8]:  # Show next 4
+                if feature in important_features:
+                    input_data[feature] = st.selectbox(
+                        feature.replace('_', ' ').title(),
+                        options=[0, 1],
+                        format_func=lambda x: "No" if x == 0 else "Yes"
                 )
 
-        # Service Features
-        st.write("#### 🔧 Service Features")
-        features_col1, features_col2 = st.columns(2)
-        
-        with features_col1:
-            if 'online_security' in important_features:
-                input_data['online_security'] = st.selectbox(
-                    "Online Security",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-            
-            if 'online_backup' in important_features:
-                input_data['online_backup'] = st.selectbox(
-                    "Online Backup",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-                
-        with features_col2:
-            if 'premium_tech_support' in important_features:
-                input_data['premium_tech_support'] = st.selectbox(
-                    "Premium Tech Support",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-            
-            if 'streaming_tv' in important_features:
-                input_data['streaming_tv'] = st.selectbox(
-                    "Streaming TV",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-
-        # Contract and Payment
-        st.write("#### 💰 Contract & Payment")
+        st.write("#### 📞 Contract & Payment")
         contract_col1, contract_col2 = st.columns(2)
         
         with contract_col1:
-            if 'contract_One Year' in important_features:
-                input_data['contract_One Year'] = st.selectbox(
-                    "One Year Contract",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-            
-            if 'contract_Two Year' in important_features:
-                input_data['contract_Two Year'] = st.selectbox(
-                    "Two Year Contract",
+            contract_features = [f for f in important_features if 'contract' in f or 'payment' in f]
+            for feature in contract_features[:2]:
+                input_data[feature] = st.selectbox(
+                    feature.replace('_', ' ').title(),
                     options=[0, 1],
                     format_func=lambda x: "No" if x == 0 else "Yes"
                 )
                 
         with contract_col2:
-            if 'payment_method_Electronic check' in important_features:
-                input_data['payment_method_Electronic check'] = st.selectbox(
-                    "Electronic Check Payment",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-            
-            if 'paperless_billing' in important_features:
-                input_data['paperless_billing'] = st.selectbox(
-                    "Paperless Billing",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
+            for feature in contract_features[2:4]:
+                if feature in important_features:
+                    input_data[feature] = st.selectbox(
+                        feature.replace('_', ' ').title(),
+                        options=[0, 1],
+                        format_func=lambda x: "No" if x == 0 else "Yes"
+                    )
 
         submitted = st.form_submit_button("Predict Churn")
 
         if submitted:
             # Create complete input DataFrame with all features
-            # For important features, use user input
-            # For other features, use median values from training data
             complete_input = {}
             
             # Fill all features with median values first
@@ -591,17 +545,13 @@ with tab2:
 
     if matplotlib_available:
         fig, ax = plt.subplots(figsize=(10, 8))
-        sns.barplot(data=feature_importance.head(15), x='importance', y='feature', ax=ax)
-        ax.set_title('Top 15 Feature Importance')
+        sns.barplot(data=feature_importance.head(12), x='importance', y='feature', ax=ax)
+        ax.set_title('Top 12 Feature Importance')
         ax.set_xlabel('Importance Score')
         st.pyplot(fig)
     else:
         # Fallback: display as bar chart using streamlit
-        st.bar_chart(feature_importance.head(15).set_index('feature'))
-
-    # Display feature importance table
-    with st.expander("View All Feature Importance"):
-        st.dataframe(feature_importance)
+        st.bar_chart(feature_importance.head(12).set_index('feature'))
 
     # Classification Report
     st.subheader("📋 Classification Report")
@@ -609,6 +559,10 @@ with tab2:
     clf_report_df = pd.DataFrame(clf_report).transpose()
     st.dataframe(clf_report_df)
 
+    # Add retrain button
+    if st.button("🔄 Retrain Model"):
+        st.session_state.model_trained = False
+        st.rerun()
 
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard | Model: LightGBM with SMOTE")
