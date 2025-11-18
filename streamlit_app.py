@@ -126,6 +126,16 @@ def train_lightgbm_model(df_ml):
     return (best_model, scaler, smote, X_train, X_test, y_train, y_test,
             y_pred, y_pred_proba, grid_search.best_params_, metrics)
 
+# --- GET IMPORTANT FEATURES ---
+def get_important_features(model, feature_names, top_n=15):
+    """Get top N most important features from the trained model."""
+    feature_importance = pd.DataFrame({
+        'feature': feature_names,
+        'importance': model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    
+    return feature_importance.head(top_n)['feature'].tolist()
+
 # --- MAIN APP ---
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
 st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
@@ -311,59 +321,207 @@ with tab2:
     st.subheader("⚙️ Best Hyperparameters")
     st.json(best_params)
 
+    # Get important features for prediction form
+    important_features = get_important_features(best_model, X_train.columns.tolist(), top_n=15)
+    
+    # Display important features info
+    with st.expander("📋 Important Features for Prediction"):
+        st.write("The following features are the most important for churn prediction:")
+        for i, feature in enumerate(important_features, 1):
+            st.write(f"{i}. {feature}")
+
     # --- PREDICTION INTERFACE ---
     st.subheader("🎯 Make Predictions")
 
     st.markdown("""
-    Enter customer details below to predict churn probability.
+    Enter customer details below to predict churn probability. Only the most important features are shown.
     """)
 
-    # Get feature names for input
-    feature_columns = X_train.columns.tolist()
-
-    # Create input form
+    # Create input form with only important features
     with st.form("prediction_form"):
-        st.write("### Customer Details")
-
-        # Create two columns for better layout
-        col1, col2 = st.columns(2)
-
+        st.write("### Customer Details (Important Features Only)")
+        
+        # Group important features into categories for better organization
         input_data = {}
-
-        with col1:
-            for feature in feature_columns[:len(feature_columns)//2]:
-                min_val = float(df[feature].min())
-                max_val = float(df[feature].max())
-                default_val = float(df[feature].median())
-                input_data[feature] = st.number_input(
-                    f"{feature}",
+        
+        # Demographics and Basic Info
+        st.write("#### 📊 Demographics & Basic Information")
+        demo_col1, demo_col2 = st.columns(2)
+        
+        with demo_col1:
+            if 'age' in important_features:
+                min_val = float(df['age'].min())
+                max_val = float(df['age'].max())
+                default_val = float(df['age'].median())
+                input_data['age'] = st.slider(
+                    "Age",
                     min_value=min_val,
                     max_value=max_val,
-                    value=default_val,
-                    step=(max_val - min_val) / 100
+                    value=default_val
+                )
+            
+            if 'gender' in important_features:
+                input_data['gender'] = st.selectbox(
+                    "Gender",
+                    options=[0, 1],
+                    format_func=lambda x: "Female" if x == 0 else "Male"
+                )
+                
+        with demo_col2:
+            if 'senior_citizen' in important_features:
+                input_data['senior_citizen'] = st.selectbox(
+                    "Senior Citizen",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'dependents' in important_features:
+                input_data['dependents'] = st.selectbox(
+                    "Has Dependents",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
                 )
 
-        with col2:
-            for feature in feature_columns[len(feature_columns)//2:]:
-                min_val = float(df[feature].min())
-                max_val = float(df[feature].max())
-                default_val = float(df[feature].median())
-                input_data[feature] = st.number_input(
-                    f"{feature}",
+        # Service Usage
+        st.write("#### 📞 Service Usage")
+        service_col1, service_col2 = st.columns(2)
+        
+        with service_col1:
+            if 'tenure' in important_features:
+                min_val = float(df['tenure'].min())
+                max_val = float(df['tenure'].max())
+                default_val = float(df['tenure'].median())
+                input_data['tenure'] = st.slider(
+                    "Tenure (months)",
                     min_value=min_val,
                     max_value=max_val,
-                    value=default_val,
-                    step=(max_val - min_val) / 100
+                    value=default_val
+                )
+            
+            if 'monthly_charges' in important_features:
+                min_val = float(df['monthly_charges'].min())
+                max_val = float(df['monthly_charges'].max())
+                default_val = float(df['monthly_charges'].median())
+                input_data['monthly_charges'] = st.slider(
+                    "Monthly Charges",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+                
+        with service_col2:
+            if 'avg_monthly_long_distance_charges' in important_features:
+                min_val = float(df['avg_monthly_long_distance_charges'].min())
+                max_val = float(df['avg_monthly_long_distance_charges'].max())
+                default_val = float(df['avg_monthly_long_distance_charges'].median())
+                input_data['avg_monthly_long_distance_charges'] = st.slider(
+                    "Avg Monthly Long Distance Charges",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+            
+            if 'avg_monthly_gb_download' in important_features:
+                min_val = float(df['avg_monthly_gb_download'].min())
+                max_val = float(df['avg_monthly_gb_download'].max())
+                default_val = float(df['avg_monthly_gb_download'].median())
+                input_data['avg_monthly_gb_download'] = st.slider(
+                    "Avg Monthly GB Download",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+
+        # Service Features
+        st.write("#### 🔧 Service Features")
+        features_col1, features_col2 = st.columns(2)
+        
+        with features_col1:
+            if 'online_security' in important_features:
+                input_data['online_security'] = st.selectbox(
+                    "Online Security",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'online_backup' in important_features:
+                input_data['online_backup'] = st.selectbox(
+                    "Online Backup",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+                
+        with features_col2:
+            if 'premium_tech_support' in important_features:
+                input_data['premium_tech_support'] = st.selectbox(
+                    "Premium Tech Support",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'streaming_tv' in important_features:
+                input_data['streaming_tv'] = st.selectbox(
+                    "Streaming TV",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+
+        # Contract and Payment
+        st.write("#### 💰 Contract & Payment")
+        contract_col1, contract_col2 = st.columns(2)
+        
+        with contract_col1:
+            if 'contract_One Year' in important_features:
+                input_data['contract_One Year'] = st.selectbox(
+                    "One Year Contract",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'contract_Two Year' in important_features:
+                input_data['contract_Two Year'] = st.selectbox(
+                    "Two Year Contract",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+                
+        with contract_col2:
+            if 'payment_method_Electronic check' in important_features:
+                input_data['payment_method_Electronic check'] = st.selectbox(
+                    "Electronic Check Payment",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'paperless_billing' in important_features:
+                input_data['paperless_billing'] = st.selectbox(
+                    "Paperless Billing",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
                 )
 
         submitted = st.form_submit_button("Predict Churn")
 
         if submitted:
-            # Create input DataFrame
-            input_df = pd.DataFrame([input_data])
-
+            # Create complete input DataFrame with all features
+            # For important features, use user input
+            # For other features, use median values from training data
+            complete_input = {}
+            
+            # Fill all features with median values first
+            for feature in X_train.columns:
+                complete_input[feature] = float(X_train[feature].median())
+            
+            # Update with user input for important features
+            for feature in input_data:
+                if feature in complete_input:
+                    complete_input[feature] = input_data[feature]
+            
+            # Create DataFrame
+            input_df = pd.DataFrame([complete_input])
+            
             # Ensure correct column order
-            input_df = input_df[feature_columns]
+            input_df = input_df[X_train.columns]
 
             # Scale the input
             input_scaled = scaler.transform(input_df)
@@ -393,6 +551,16 @@ with tab2:
             st.write("**Churn Probability Gauge:**")
             st.progress(float(churn_probability))
             st.caption(f"Churn likelihood: {churn_probability*100:.1f}%")
+            
+            # Show interpretation
+            with st.expander("💡 Interpretation Guide"):
+                st.write("""
+                **Churn Probability Interpretation:**
+                - **0-30%**: Low risk - Standard customer engagement
+                - **30-60%**: Medium risk - Monitor and proactive engagement
+                - **60-80%**: High risk - Implement retention strategies
+                - **80-100%**: Very high risk - Immediate intervention needed
+                """)
 
     # Confusion Matrix
     st.subheader("📈 Confusion Matrix")
@@ -423,13 +591,13 @@ with tab2:
 
     if matplotlib_available:
         fig, ax = plt.subplots(figsize=(10, 8))
-        sns.barplot(data=feature_importance.head(10), x='importance', y='feature', ax=ax)
-        ax.set_title('Top 10 Feature Importance')
+        sns.barplot(data=feature_importance.head(15), x='importance', y='feature', ax=ax)
+        ax.set_title('Top 15 Feature Importance')
         ax.set_xlabel('Importance Score')
         st.pyplot(fig)
     else:
         # Fallback: display as bar chart using streamlit
-        st.bar_chart(feature_importance.head(10).set_index('feature'))
+        st.bar_chart(feature_importance.head(15).set_index('feature'))
 
     # Display feature importance table
     with st.expander("View All Feature Importance"):
