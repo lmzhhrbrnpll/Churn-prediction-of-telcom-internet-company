@@ -217,29 +217,6 @@ with tab1:
         st.subheader("Basic Statistics")
         st.dataframe(df.describe())
 
-    # --- VISUALIZATIONS ---
-    st.subheader("📊 Visualizations")
-    
-    viz_col1, viz_col2 = st.columns(2)
-    
-    with viz_col1:
-        # Churn distribution
-        st.subheader("Churn Distribution")
-        churn_counts = df_selection["churn_value"].value_counts()
-        churn_df = pd.DataFrame({
-            'Churn Status': ['Not Churned', 'Churned'],
-            'Count': churn_counts.values
-        })
-        st.bar_chart(churn_df.set_index('Churn Status'))
-
-    with viz_col2:
-        # Show relationship between a numerical feature and churn
-        if len(numerical_cols) > 0:
-            numerical_feature = numerical_cols[0]
-            st.subheader(f"Avg. {numerical_feature} by Churn Status")
-            avg_by_churn = df_selection.groupby('churn_value')[numerical_feature].mean()
-            st.bar_chart(avg_by_churn)
-
     # --- DISPLAY RAW DATA ---
     with st.expander("View Raw Data"):
         st.dataframe(df_selection)
