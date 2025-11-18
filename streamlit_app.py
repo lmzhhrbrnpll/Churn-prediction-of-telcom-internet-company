@@ -29,22 +29,28 @@ st.set_page_config(
 
 # --- DATA LOADING ---
 @st.cache_data
-def load_multiple_files():
-    files = ["Customer_Info.csv", "Location_Data.csv", "Online_Services.csv", "Payment_Info.csv", "Service_Options.csv", "Status_Analysis"]
-    df = []
-    for file in files:
-        try:
-            df = pd.read_csv(file)
-            df.append(df)
-        except:
-            st.warning(f"File {file} tidak ditemukan")
-
-    if df:
-        return pd.concat(df, ignore_index=True)
-    else:
-        st.error("Tidak ada file yang berhasil dimuat")
-        st.stop()
-    return df
+def load_data():
+    """Loads the customer churn dataset."""
+    try:
+        # Coba load file individual dulu
+        files = ["Customer_Info.csv", "Location_Data.csv", "Online_Services.csv", "Payment_Info.csv", "Service_Options.csv", "Status_Analysis.csv"]
+        dfs = []
+        
+        for file in files:
+            try:
+                df_temp = pd.read_csv(file)
+                dfs.append(df_temp)
+                st.success(f"Berhasil memuat: {file}")
+            except Exception as e:
+                st.warning(f"File {file} tidak ditemukan: {str(e)}")
+        
+        if dfs:
+            # Gabungkan semua file jika ada multiple files
+            if len(dfs) > 1:
+                # Gabungkan berdasarkan kolom umum atau gunakan concat sederhana
+                df_combined = pd.concat(dfs, axis=1)
+                # Hapus kolom duplikat
+                df_combined = df_combined.loc[:, ~
 
 df = load_data()
 
