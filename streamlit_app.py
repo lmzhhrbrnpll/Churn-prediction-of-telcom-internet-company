@@ -330,26 +330,7 @@ with tab1:
                 avg_by_churn = df_selection.groupby('churn_value')[numerical_feature].mean()
                 st.bar_chart(avg_by_churn)
 
-        # Second row of visualizations
-        viz_col3, viz_col4 = st.columns(2)
-
-        with viz_col3:
-            # Show distribution of a categorical variable
-            if len(filterable_cols) > 0:
-                cat_feature = filterable_cols[0]
-                if cat_feature in df_selection.columns:
-                    st.subheader(f"{cat_feature} Distribution")
-                    cat_counts = df_selection[cat_feature].value_counts()
-                    st.bar_chart(cat_counts)
-
-        with viz_col4:
-            # Show distribution of a numerical variable
-            if len(numerical_cols_for_display) > 1:
-                num_feature = numerical_cols_for_display[1]
-                st.subheader(f"{num_feature} Distribution")
-                hist_data = df_selection[num_feature].value_counts().sort_index()
-                st.line_chart(hist_data)
-
+        
         # --- DATA SUMMARY ---
         st.subheader("📋 Data Summary")
 
