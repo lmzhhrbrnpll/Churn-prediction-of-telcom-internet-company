@@ -54,7 +54,9 @@ def load_data():
                 return df_combined
             else:
                 return dfs[0]
-        
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        st.stop()
 
 df = load_data()
 
