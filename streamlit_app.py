@@ -245,9 +245,6 @@ with tab1:
             st.subheader("Basic Statistics")
             st.dataframe(df.describe())
 
-        # Correlation matrix
-        st.subheader("📊 Correlation Matrix")
-        corr_matrix = df.corr()
 
         # --- DISPLAY RAW DATA ---
         with st.expander("View Filtered Data"):
