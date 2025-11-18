@@ -2,12 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score, precision_score, recall_score, f1_score
 from imblearn.over_sampling import SMOTE
 import lightgbm as lgb
-import joblib
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -56,11 +55,11 @@ def preprocess_data(df):
 
     return df_ml
 
-# --- MODEL TRAINING WITH LIGHTGBM AND SMOTE ---
+# --- OPTIMIZED MODEL TRAINING ---
 @st.cache_resource
-def train_lightgbm_model(df_ml):
-    """Train LightGBM model with hyperparameter tuning and SMOTE."""
-
+def train_lightgbm_model_optimized(df_ml):
+    """Train LightGBM model with optimized hyperparameters and SMOTE."""
+    
     # Prepare features and target
     X = df_ml.drop('churn_value', axis=1)
     y = df_ml['churn_value']
@@ -79,30 +78,24 @@ def train_lightgbm_model(df_ml):
     X_train_scaled = scaler.fit_transform(X_train_resampled)
     X_test_scaled = scaler.transform(X_test)
 
-    # LightGBM hyperparameter tuning
-    param_grid = {
-        'n_estimators': [100, 200, 300],
-        'max_depth': [3, 5, 7, -1],
-        'learning_rate': [0.01, 0.05, 0.1],
-        'num_leaves': [31, 50, 100],
-        'subsample': [0.8, 0.9, 1.0],
-        'colsample_bytree': [0.8, 0.9, 1.0],
-        'reg_alpha': [0, 0.1, 0.5],
-        'reg_lambda': [0, 0.1, 0.5]
+    # OPTIMIZED: Use fixed hyperparameters instead of GridSearchCV
+    # These are commonly good parameters for LightGBM with SMOTE
+    best_params = {
+        'n_estimators': 200,
+        'max_depth': 7,
+        'learning_rate': 0.05,
+        'num_leaves': 31,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'reg_alpha': 0.1,
+        'reg_lambda': 0.1,
+        'random_state': 42,
+        'verbose': -1
     }
 
-    lgb_model = lgb.LGBMClassifier(random_state=42, verbose=-1)
-
-    # Use Stratified K-Fold for cross-validation
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
-    grid_search = GridSearchCV(
-        lgb_model, param_grid, cv=cv, scoring='roc_auc', n_jobs=-1, verbose=0
-    )
-
-    grid_search.fit(X_train_scaled, y_train_resampled)
-
-    best_model = grid_search.best_estimator_
+    # Train model with optimized parameters
+    best_model = lgb.LGBMClassifier(**best_params)
+    best_model.fit(X_train_scaled, y_train_resampled)
 
     # Make predictions
     y_pred = best_model.predict(X_test_scaled)
@@ -124,11 +117,11 @@ def train_lightgbm_model(df_ml):
     }
 
     return (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-            y_pred, y_pred_proba, grid_search.best_params_, metrics)
+            y_pred, y_pred_proba, best_params, metrics)
 
 # --- MAIN APP ---
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
-st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
+st.markdown("**Model: LightGBM with Optimized Hyperparameters + SMOTE**")
 
 # Create tabs for Data Overview and Prediction
 tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model"])
@@ -150,7 +143,7 @@ with tab1:
         default=df["churn_value"].unique()
     )
 
-    # Filter for other numerical columns (select top 5 for simplicity)
+    # Filter for other numerical columns
     numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     numerical_cols = [col for col in numerical_cols if col != 'churn_value'][:5]
     
@@ -232,7 +225,7 @@ with tab2:
     # --- CHURN PREDICTION MODEL ---
     st.header("🤖 Customer Churn Prediction Model")
     st.markdown("""
-    This section uses a tuned LightGBM classifier with SMOTE to handle class imbalance for customer churn prediction.
+    This section uses an optimized LightGBM classifier with SMOTE to handle class imbalance for customer churn prediction.
     Target variable: **churn_value**
     """)
 
@@ -245,10 +238,26 @@ with tab2:
         st.write("**Class Distribution:**")
         st.write(df_ml['churn_value'].value_counts())
 
+    # Train model with progress
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("Preparing data...")
+    progress_bar.progress(20)
+    
+    status_text.text("Applying SMOTE...")
+    progress_bar.progress(40)
+    
+    status_text.text("Training LightGBM model with optimized parameters...")
+    
     # Train model
-    with st.spinner("Training LightGBM model with SMOTE and hyperparameter tuning..."):
-        (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-         y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model(df_ml)
+    (best_model, scaler, smote, X_train, X_test, y_train, y_test,
+     y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model_optimized(df_ml)
+    
+    progress_bar.progress(80)
+    status_text.text("Making predictions and calculating metrics...")
+    progress_bar.progress(100)
+    status_text.text("")
 
     st.success("Model training completed!")
 
@@ -285,10 +294,10 @@ with tab2:
         st.metric("Features", X_train.shape[1])
 
     # Display best parameters
-    st.subheader("⚙️ Best Hyperparameters")
+    st.subheader("⚙️ Optimized Hyperparameters")
     st.json(best_params)
 
-    # Get all features for prediction form (since data already has top 15 features)
+    # Get all features for prediction form
     all_features = X_train.columns.tolist()
     
     # Display features info
@@ -552,26 +561,6 @@ with tab2:
                            columns=['Predicted Not Churn', 'Predicted Churn'])
         st.dataframe(cm_df)
 
-    # Feature Importance
-    st.subheader("🔍 Feature Importance")
-    feature_importance = pd.DataFrame({
-        'feature': X_train.columns,
-        'importance': best_model.feature_importances_
-    }).sort_values('importance', ascending=False)
-
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.barplot(data=feature_importance, x='importance', y='feature', ax=ax)
-        ax.set_title('Feature Importance')
-        ax.set_xlabel('Importance Score')
-        st.pyplot(fig)
-    else:
-        # Fallback: display as bar chart using streamlit
-        st.bar_chart(feature_importance.set_index('feature'))
-
-    # Display feature importance table
-    with st.expander("View Feature Importance Table"):
-        st.dataframe(feature_importance)
 
     # Classification Report
     st.subheader("📋 Classification Report")
