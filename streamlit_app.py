@@ -33,7 +33,7 @@ def load_data():
     """Loads the customer churn dataset."""
     try:
         # Coba load file individual dulu
-        files = ["Customer_Info.csv", "Location_Data.csv", "Online_Services.csv", "Payment_Info.csv", "Service_Options.csv", "Status_Analysis.csv"]
+        files = ["Data/Customer_Info.csv", "Data/Location_Data.csv", "Data/Online_Services.csv", "Data/Payment_Info.csv", "Data/Service_Options.csv", "Data/Status_Analysis.csv"]
         dfs = []
         
         for file in files:
