@@ -40,7 +40,6 @@ def load_data():
             try:
                 df_temp = pd.read_csv(file)
                 dfs.append(df_temp)
-                st.success(f"Berhasil memuat: {file}")
             except Exception as e:
                 st.warning(f"File {file} tidak ditemukan: {str(e)}")
         
@@ -83,8 +82,8 @@ def preprocess_data(df):
     df_ml = df_ml.drop(existing_columns_to_drop, axis=1)
     
     # Remove CustomerID if exists
-    if 'CustomerID' in df_ml.columns:
-        df_ml = df_ml.drop('CustomerID', axis=1)
+    if 'customer_id' in df_ml.columns:
+        df_ml = df_ml.drop('customer_id', axis=1)
 
     # Handle missing values
     numeric_columns = df_ml.select_dtypes(include=[np.number]).columns
