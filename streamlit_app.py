@@ -130,25 +130,17 @@ def train_lightgbm_model(df_ml):
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
 st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
 
-# Create tabs for EDA and Prediction
-tab1, tab2, tab3 = st.tabs(["📈 Exploratory Data Analysis", "🤖 Churn Prediction Model", "🔍 Data Overview"])
+# Create tabs for Data Overview and Prediction
+tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model")
 
 with tab1:
-    # --- EDA CONTENT ---
+    # --- Data Overview CONTENT ---
     st.markdown("""
-    This application performs exploratory data analysis (EDA) on the preprocessed Customer Churn dataset.
+    This application performs data overview on the preprocessed Customer Churn dataset.
     Use the filters in the sidebar to explore customer behavior and churn patterns.
     """)
 
-    # Display dataset info
-    with st.expander("ℹ️ Dataset Information"):
-        st.info("""
-        **Dataset Characteristics:**
-        - Data sudah diproses dan siap untuk analisis
-        - Semua fitur sudah dalam format numerik
-        - Tidak diperlukan preprocessing tambahan
-        - Target variable: **churn_value**
-        """)
+
 
     # --- SIDEBAR FOR FILTERS ---
     st.sidebar.header("Filter Customers")
@@ -220,30 +212,7 @@ with tab1:
 
         st.markdown("---")
 
-        # --- VISUALIZATIONS ---
-        st.subheader("📊 Visualizations")
-
-        # Arrange charts in columns
-        viz_col1, viz_col2 = st.columns(2)
-
-        with viz_col1:
-            # Churn distribution
-            st.subheader("Churn Distribution")
-            churn_counts = df_selection["churn_value"].value_counts()
-            churn_df = pd.DataFrame({
-                'Churn Status': ['Not Churned', 'Churned'],
-                'Count': churn_counts.values
-            })
-            st.bar_chart(churn_df.set_index('Churn Status'))
-
-        with viz_col2:
-            # Show relationship between a numerical feature and churn
-            if len(numerical_cols) > 0:
-                numerical_feature = numerical_cols[0]
-                st.subheader(f"Avg. {numerical_feature} by Churn Status")
-                avg_by_churn = df_selection.groupby('churn_value')[numerical_feature].mean()
-                st.bar_chart(avg_by_churn)
-
+        
         # --- DATA SUMMARY ---
         st.subheader("📋 Data Summary")
 
@@ -261,6 +230,25 @@ with tab1:
             st.write(f"- Total Features: {df_selection.shape[1]}")
             st.write(f"- Total Samples: {df_selection.shape[0]}")
             st.write(f"- Numerical Features: {len(df_selection.select_dtypes(include=[np.number]).columns)}")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Dataset Info")
+            st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
+        
+            # Data types
+            st.write("**Data Types:**")
+            dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
+            st.dataframe(dtype_info)
+
+        with col2:
+            st.subheader("Basic Statistics")
+            st.dataframe(df.describe())
+
+        # Correlation matrix
+        st.subheader("📊 Correlation Matrix")
+        corr_matrix = df.corr()
 
         # --- DISPLAY RAW DATA ---
         with st.expander("View Filtered Data"):
@@ -457,50 +445,6 @@ with tab2:
     clf_report_df = pd.DataFrame(clf_report).transpose()
     st.dataframe(clf_report_df)
 
-with tab3:
-    # --- DATA OVERVIEW TAB ---
-    st.header("🔍 Data Overview")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Dataset Info")
-        st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
-        
-        # Data types
-        st.write("**Data Types:**")
-        dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
-        st.dataframe(dtype_info)
-
-    with col2:
-        st.subheader("Basic Statistics")
-        st.dataframe(df.describe())
-
-    # Missing values
-    st.subheader("🔍 Missing Values Analysis")
-    missing_data = df.isnull().sum()
-    missing_percent = (missing_data / len(df)) * 100
-    missing_df = pd.DataFrame({
-        'Missing Values': missing_data,
-        'Percentage': missing_percent
-    })
-    st.dataframe(missing_df[missing_df['Missing Values'] > 0])
-
-    # Correlation matrix
-    st.subheader("📊 Correlation Matrix")
-    corr_matrix = df.corr()
-
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(12, 10))
-        sns.heatmap(corr_matrix, annot=False, fmt=".2f", cmap="coolwarm", ax=ax)
-        st.pyplot(fig)
-    else:
-        st.dataframe(corr_matrix)
-
-    # --- DISPLAY RAW DATA ---
-    with st.expander("View Raw Data"):
-        st.dataframe(df)
-        st.markdown(f"**Data Dimensions:** {df.shape[0]} rows, {df.shape[1]} columns")
 
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard | Model: LightGBM with SMOTE")
