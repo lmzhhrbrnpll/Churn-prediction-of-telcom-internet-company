@@ -283,8 +283,6 @@ with tab2:
         st.write("**Data Shape:**", df_ml.shape)
         st.write("**Class Distribution:**")
         st.write(df_ml['churn_value'].value_counts())
-        st.write("**Features for modeling:**")
-        st.write([col for col in df_ml.columns if col != 'churn_value'])
 
     # Train model
     with st.spinner("Training LightGBM model with SMOTE and hyperparameter tuning..."):
