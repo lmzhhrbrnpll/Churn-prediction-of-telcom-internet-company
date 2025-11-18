@@ -131,7 +131,7 @@ st.title("📊 Customer Churn Analysis & Prediction Dashboard")
 st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
 
 # Create tabs for Data Overview and Prediction
-tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model")
+tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model"])
 
 with tab1:
     # --- Data Overview CONTENT ---
@@ -139,7 +139,6 @@ with tab1:
     This application performs data overview on the preprocessed Customer Churn dataset.
     Use the filters in the sidebar to explore customer behavior and churn patterns.
     """)
-
 
 
     # --- SIDEBAR FOR FILTERS ---
