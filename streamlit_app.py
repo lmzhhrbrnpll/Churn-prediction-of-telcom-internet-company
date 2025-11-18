@@ -150,73 +150,90 @@ with tab1:
     Use the filters in the sidebar to explore customer behavior and churn patterns.
     """)
 
-    # --- MAIN PAGE CONTENT ---
-    st.subheader("📈 Key Metrics")
 
-    # --- DISPLAY KEY METRICS ---
-    col1, col2, col3 = st.columns(3)
+    # --- FILTERING THE DATAFRAME ---
+    df_selection = df.copy()
 
-    with col1:
-        total_customers = df_selection.shape[0]
-        st.metric(label="Total Customers", value=total_customers)
+    # Apply churn filter
+    df_selection = df_selection[df_selection["churn_value"].isin(churn_status)]
 
-    with col2:
-        churn_rate = (df_selection["churn_value"].sum() / total_customers) * 100
-        st.metric(label="Churn Rate", value=f"{churn_rate:.1f}%")
+    # Apply numerical filters
+    for col in numerical_cols:
+        if col in df_selection.columns:
+            min_val, max_val = selected_range
+            df_selection = df_selection[(df_selection[col] >= min_val) & (df_selection[col] <= max_val)]
 
-    with col3:
-        st.metric(label="Churned Customers", value=df_selection["churn_value"].sum())
+    # Display error message if no data is selected
+    if df_selection.empty:
+        st.warning("No data available for the selected filters. Please adjust your selection.")
+    else:
+        # --- MAIN PAGE CONTENT ---
+        st.subheader("📈 Key Metrics")
 
-    # Additional metrics for numerical columns
-    col4, col5, col6 = st.columns(3)
+        # --- DISPLAY KEY METRICS ---
+        col1, col2, col3 = st.columns(3)
 
-    # Display average values for top 3 numerical features
-    for i, col in enumerate(numerical_cols[:3]):
-        with [col4, col5, col6][i]:
-            avg_value = round(df_selection[col].mean(), 3)
-            st.metric(label=f"Avg. {col}", value=avg_value)
+        with col1:
+            total_customers = df_selection.shape[0]
+            st.metric(label="Total Customers", value=total_customers)
 
-    st.markdown("---")
+        with col2:
+            churn_rate = (df_selection["churn_value"].sum() / total_customers) * 100
+            st.metric(label="Churn Rate", value=f"{churn_rate:.1f}%")
+
+        with col3:
+            st.metric(label="Churned Customers", value=df_selection["churn_value"].sum())
+
+        # Additional metrics for numerical columns
+        col4, col5, col6 = st.columns(3)
+
+        # Display average values for top 3 numerical features
+        for i, col in enumerate(numerical_cols[:3]):
+            with [col4, col5, col6][i]:
+                avg_value = round(df_selection[col].mean(), 3)
+                st.metric(label=f"Avg. {col}", value=avg_value)
+
+        st.markdown("---")
 
         
-    # --- DATA SUMMARY ---
-    st.subheader("📋 Data Summary")
+        # --- DATA SUMMARY ---
+        st.subheader("📋 Data Summary")
 
-    # Display some statistics
-    col9, col10 = st.columns(2)
+        # Display some statistics
+        col9, col10 = st.columns(2)
 
-    with col9:
-        st.write("**Churn Statistics:**")
-        st.write(f"- Churned Customers: {df_selection['churn_value'].sum()}")
-        st.write(f"- Non-Churned Customers: {len(df_selection) - df_selection['churn_value'].sum()}")
-        st.write(f"- Churn Rate: {churn_rate:.2f}%")
+        with col9:
+            st.write("**Churn Statistics:**")
+            st.write(f"- Churned Customers: {df_selection['churn_value'].sum()}")
+            st.write(f"- Non-Churned Customers: {len(df_selection) - df_selection['churn_value'].sum()}")
+            st.write(f"- Churn Rate: {churn_rate:.2f}%")
 
-    with col10:
-        st.write("**Dataset Information:**")
-        st.write(f"- Total Features: {df_selection.shape[1]}")
-        st.write(f"- Total Samples: {df_selection.shape[0]}")
-        st.write(f"- Numerical Features: {len(df_selection.select_dtypes(include=[np.number]).columns)}")
+        with col10:
+            st.write("**Dataset Information:**")
+            st.write(f"- Total Features: {df_selection.shape[1]}")
+            st.write(f"- Total Samples: {df_selection.shape[0]}")
+            st.write(f"- Numerical Features: {len(df_selection.select_dtypes(include=[np.number]).columns)}")
 
-    col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-    with col1:
-        st.subheader("Dataset Info")
-        st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
+        with col1:
+            st.subheader("Dataset Info")
+            st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
         
-        # Data types
-        st.write("**Data Types:**")
-        dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
-        st.dataframe(dtype_info)
+            # Data types
+            st.write("**Data Types:**")
+            dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
+            st.dataframe(dtype_info)
 
-    with col2:
-        st.subheader("Basic Statistics")
-        st.dataframe(df.describe())
+        with col2:
+            st.subheader("Basic Statistics")
+            st.dataframe(df.describe())
 
 
-    # --- DISPLAY RAW DATA ---
-    with st.expander("View Filtered Data"):
-        st.dataframe(df_selection)
-        st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
+        # --- DISPLAY RAW DATA ---
+        with st.expander("View Filtered Data"):
+            st.dataframe(df_selection)
+            st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
 
 with tab2:
     # --- CHURN PREDICTION MODEL ---
