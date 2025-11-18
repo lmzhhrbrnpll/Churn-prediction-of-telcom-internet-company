@@ -50,7 +50,11 @@ def load_data():
                 # Gabungkan berdasarkan kolom umum atau gunakan concat sederhana
                 df_combined = pd.concat(dfs, axis=1)
                 # Hapus kolom duplikat
-                df_combined = df_combined.loc[:, ~
+                df_combined = df_combined.loc[:, ~df_combined.columns.duplicated()]
+                return df_combined
+            else:
+                return dfs[0]
+        
 
 df = load_data()
 
