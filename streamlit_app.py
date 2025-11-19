@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score, precision_score, recall_score, f1_score
 from imblearn.over_sampling import SMOTE
@@ -55,14 +55,14 @@ def preprocess_data(df):
 
     return df_ml
 
-# --- MODEL TRAINING WITH LIGHTGBM AND SMOTE WITH HYPERPARAMETER TUNING ---
+# --- OPTIMIZED MODEL TRAINING ---
 @st.cache_resource
-def train_lightgbm_with_tuning(_df_ml):
-    """Train LightGBM model with hyperparameter tuning and SMOTE."""
+def train_lightgbm_model_optimized(df_ml):
+    """Train LightGBM model with optimized hyperparameters and SMOTE."""
     
     # Prepare features and target
-    X = _df_ml.drop('churn_value', axis=1)
-    y = _df_ml['churn_value']
+    X = df_ml.drop('churn_value', axis=1)
+    y = df_ml['churn_value']
 
     # Split the data (80-20 split)
     X_train, X_test, y_train, y_test = train_test_split(
@@ -78,32 +78,24 @@ def train_lightgbm_with_tuning(_df_ml):
     X_train_scaled = scaler.fit_transform(X_train_resampled)
     X_test_scaled = scaler.transform(X_test)
 
-    # LightGBM hyperparameter tuning with GridSearchCV
-    param_grid = {
-        'n_estimators': [100, 200, 300],
-        'max_depth': [3, 5, 7, -1],
-        'learning_rate': [0.01, 0.05, 0.1],
-        'num_leaves': [31, 50, 100],
-        'subsample': [0.8, 0.9, 1.0],
-        'colsample_bytree': [0.8, 0.9, 1.0],
-        'reg_alpha': [0, 0.1, 0.5],
-        'reg_lambda': [0, 0.1, 0.5]
+    # OPTIMIZED: Use fixed hyperparameters instead of GridSearchCV
+    # These are commonly good parameters for LightGBM with SMOTE
+    best_params = {
+        'n_estimators': 200,
+        'max_depth': 7,
+        'learning_rate': 0.05,
+        'num_leaves': 31,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'reg_alpha': 0.1,
+        'reg_lambda': 0.1,
+        'random_state': 42,
+        'verbose': -1
     }
 
-    lgb_model = lgb.LGBMClassifier(random_state=42, verbose=-1)
-
-    # Use Stratified K-Fold for cross-validation
-    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)  # Reduced to 3 for speed
-
-    # GridSearchCV for hyperparameter tuning
-    grid_search = GridSearchCV(
-        lgb_model, param_grid, cv=cv, scoring='roc_auc', 
-        n_jobs=-1, verbose=0, return_train_score=True
-    )
-
-    grid_search.fit(X_train_scaled, y_train_resampled)
-
-    best_model = grid_search.best_estimator_
+    # Train model with optimized parameters
+    best_model = lgb.LGBMClassifier(**best_params)
+    best_model.fit(X_train_scaled, y_train_resampled)
 
     # Make predictions
     y_pred = best_model.predict(X_test_scaled)
@@ -125,21 +117,11 @@ def train_lightgbm_with_tuning(_df_ml):
     }
 
     return (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-            y_pred, y_pred_proba, grid_search.best_params_, metrics, grid_search)
-
-# --- GET IMPORTANT FEATURES ---
-def get_important_features(model, feature_names, top_n=15):
-    """Get top N most important features from the trained model."""
-    feature_importance = pd.DataFrame({
-        'feature': feature_names,
-        'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    
-    return feature_importance.head(top_n)['feature'].tolist()
+            y_pred, y_pred_proba, best_params, metrics)
 
 # --- MAIN APP ---
 st.title("📊 Customer Churn Analysis & Prediction Dashboard")
-st.markdown("**Model: LightGBM with Hyperparameter Tuning + SMOTE**")
+st.markdown("**Model: LightGBM with Optimized Hyperparameters + SMOTE**")
 
 # Create tabs for Data Overview and Prediction
 tab1, tab2 = st.tabs(["📈 🔍 Data Overview", "🤖 Churn Prediction Model"])
@@ -148,85 +130,102 @@ with tab1:
     # --- Data Overview CONTENT ---
     st.markdown("""
     This application performs data overview on the preprocessed Customer Churn dataset.
+    Use the filters in the sidebar to explore customer behavior and churn patterns.
     """)
 
-    # Use the full dataset without filtering
-    df_selection = df.copy()
+    # --- SIDEBAR FOR FILTERS ---
+    st.sidebar.header("Filter Customers")
 
-    # --- MAIN PAGE CONTENT ---
-    st.subheader("📈 Key Metrics")
+    # Filter for Churn status
+    churn_status = st.sidebar.multiselect(
+        "Select Churn Status",
+        options=df["churn_value"].unique(),
+        default=df["churn_value"].unique()
+    )
 
-    # --- DISPLAY KEY METRICS ---
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        total_customers = df_selection.shape[0]
-        st.metric(label="Total Customers", value=total_customers)
-
-    with col2:
-        churn_rate = (df_selection["churn_value"].sum() / total_customers) * 100
-        st.metric(label="Churn Rate", value=f"{churn_rate:.1f}%")
-
-    with col3:
-        st.metric(label="Churned Customers", value=df_selection["churn_value"].sum())
-
-    # Additional metrics for numerical columns
-    col4, col5, col6 = st.columns(3)
-
-    # Display average values for top 3 numerical features
+    # Filter for other numerical columns
     numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    numerical_cols = [col for col in numerical_cols if col != 'churn_value'][:3]
+    numerical_cols = [col for col in numerical_cols if col != 'churn_value'][:5]
     
-    for i, col in enumerate(numerical_cols):
-        with [col4, col5, col6][i]:
-            avg_value = round(df_selection[col].mean(), 3)
-            st.metric(label=f"Avg. {col}", value=avg_value)
+    # Apply filters to dataframe
+    df_selection = df.copy()
+    df_selection = df_selection[df_selection["churn_value"].isin(churn_status)]
 
-    st.markdown("---")
-    
-    # --- DATA SUMMARY ---
-    st.subheader("📋 Data Summary")
+    # Display error message if no data is selected
+    if df_selection.empty:
+        st.warning("No data available for the selected filters. Please adjust your selection.")
+    else:
+        # --- MAIN PAGE CONTENT ---
+        st.subheader("📈 Key Metrics")
 
-    # Display some statistics
-    col9, col10 = st.columns(2)
+        # --- DISPLAY KEY METRICS ---
+        col1, col2, col3 = st.columns(3)
 
-    with col9:
-        st.write("**Churn Statistics:**")
-        st.write(f"- Churned Customers: {df_selection['churn_value'].sum()}")
-        st.write(f"- Non-Churned Customers: {len(df_selection) - df_selection['churn_value'].sum()}")
-        st.write(f"- Churn Rate: {churn_rate:.2f}%")
+        with col1:
+            total_customers = df_selection.shape[0]
+            st.metric(label="Total Customers", value=total_customers)
 
-    with col10:
-        st.write("**Dataset Information:**")
-        st.write(f"- Total Features: {df_selection.shape[1]}")
-        st.write(f"- Total Samples: {df_selection.shape[0]}")
-        st.write(f"- Numerical Features: {len(df_selection.select_dtypes(include=[np.number]).columns)}")
+        with col2:
+            churn_rate = (df_selection["churn_value"].sum() / total_customers) * 100
+            st.metric(label="Churn Rate", value=f"{churn_rate:.1f}%")
 
-    col1, col2 = st.columns(2)
+        with col3:
+            st.metric(label="Churned Customers", value=df_selection["churn_value"].sum())
 
-    with col1:
-        st.subheader("Dataset Info")
-        st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
-    
-        # Data types
-        st.write("**Data Types:**")
-        dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
-        st.dataframe(dtype_info)
+        # Additional metrics for numerical columns
+        col4, col5, col6 = st.columns(3)
 
-    with col2:
-        st.subheader("Basic Statistics")
-        st.dataframe(df.describe())
+        # Display average values for top 3 numerical features
+        for i, col in enumerate(numerical_cols[:3]):
+            with [col4, col5, col6][i]:
+                avg_value = round(df_selection[col].mean(), 3)
+                st.metric(label=f"Avg. {col}", value=avg_value)
 
-    # --- DISPLAY RAW DATA ---
-    with st.expander("View Raw Data"):
-        st.dataframe(df_selection)
-        st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
+        st.markdown("---")
+        
+        # --- DATA SUMMARY ---
+        st.subheader("📋 Data Summary")
+
+        # Display some statistics
+        col9, col10 = st.columns(2)
+
+        with col9:
+            st.write("**Churn Statistics:**")
+            st.write(f"- Churned Customers: {df_selection['churn_value'].sum()}")
+            st.write(f"- Non-Churned Customers: {len(df_selection) - df_selection['churn_value'].sum()}")
+            st.write(f"- Churn Rate: {churn_rate:.2f}%")
+
+        with col10:
+            st.write("**Dataset Information:**")
+            st.write(f"- Total Features: {df_selection.shape[1]}")
+            st.write(f"- Total Samples: {df_selection.shape[0]}")
+            st.write(f"- Numerical Features: {len(df_selection.select_dtypes(include=[np.number]).columns)}")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Dataset Info")
+            st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
+        
+            # Data types
+            st.write("**Data Types:**")
+            dtype_info = pd.DataFrame(df.dtypes, columns=['Data Type'])
+            st.dataframe(dtype_info)
+
+        with col2:
+            st.subheader("Basic Statistics")
+            st.dataframe(df.describe())
+
+        # --- DISPLAY RAW DATA ---
+        with st.expander("View Filtered Data"):
+            st.dataframe(df_selection)
+            st.markdown(f"**Data Dimensions:** {df_selection.shape[0]} rows, {df_selection.shape[1]} columns")
 
 with tab2:
     # --- CHURN PREDICTION MODEL ---
     st.header("🤖 Customer Churn Prediction Model")
     st.markdown("""
-    This section uses a **tuned LightGBM classifier with SMOTE and GridSearchCV** to handle class imbalance for customer churn prediction.
+    This section uses an optimized LightGBM classifier with SMOTE to handle class imbalance for customer churn prediction.
     Target variable: **churn_value**
     """)
 
@@ -238,56 +237,29 @@ with tab2:
         st.write("**Data Shape:**", df_ml.shape)
         st.write("**Class Distribution:**")
         st.write(df_ml['churn_value'].value_counts())
-        st.write("**Preprocessing Steps:**")
-        st.write("- SMOTE for class imbalance handling")
-        st.write("- StandardScaler for feature scaling")
-        st.write("- GridSearchCV for hyperparameter tuning")
 
-    # Add a button to train the model
-    if 'model_trained' not in st.session_state:
-        st.session_state.model_trained = False
+    # Train model with progress
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("Preparing data...")
+    progress_bar.progress(20)
+    
+    status_text.text("Applying SMOTE...")
+    progress_bar.progress(40)
+    
+    status_text.text("Training LightGBM model with optimized parameters...")
+    
+    # Train model
+    (best_model, scaler, smote, X_train, X_test, y_train, y_test,
+     y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model_optimized(df_ml)
+    
+    progress_bar.progress(80)
+    status_text.text("Making predictions and calculating metrics...")
+    progress_bar.progress(100)
+    status_text.text("")
 
-    if not st.session_state.model_trained:
-        if st.button("🚀 Train Model with Hyperparameter Tuning", type="primary"):
-            with st.spinner("Training LightGBM model with SMOTE and GridSearchCV hyperparameter tuning... This may take a few minutes."):
-                try:
-                    (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-                     y_pred, y_pred_proba, best_params, metrics, grid_search) = train_lightgbm_with_tuning(df_ml)
-                    
-                    # Store in session state
-                    st.session_state.update({
-                        'best_model': best_model,
-                        'scaler': scaler,
-                        'X_train': X_train,
-                        'X_test': X_test,
-                        'y_train': y_train,
-                        'y_test': y_test,
-                        'y_pred': y_pred,
-                        'y_pred_proba': y_pred_proba,
-                        'best_params': best_params,
-                        'metrics': metrics,
-                        'grid_search': grid_search,
-                        'model_trained': True
-                    })
-                    st.success("Model training with hyperparameter tuning completed!")
-                except Exception as e:
-                    st.error(f"Error during model training: {str(e)}")
-        else:
-            st.info("Click the button above to train the model with hyperparameter tuning.")
-            st.stop()
-    else:
-        # Load from session state
-        best_model = st.session_state.best_model
-        scaler = st.session_state.scaler
-        X_train = st.session_state.X_train
-        X_test = st.session_state.X_test
-        y_train = st.session_state.y_train
-        y_test = st.session_state.y_test
-        y_pred = st.session_state.y_pred
-        y_pred_proba = st.session_state.y_pred_proba
-        best_params = st.session_state.best_params
-        metrics = st.session_state.metrics
-        grid_search = st.session_state.grid_search
+    st.success("Model training completed!")
 
     # Display model performance
     st.subheader("📊 Model Performance")
@@ -321,59 +293,62 @@ with tab2:
     with col8:
         st.metric("Features", X_train.shape[1])
 
-    # Display best parameters from hyperparameter tuning
-    st.subheader("⚙️ Best Hyperparameters from GridSearchCV")
+    # Display best parameters
+    st.subheader("⚙️ Optimized Hyperparameters")
     st.json(best_params)
 
-    # Display information about the tuning process
-    with st.expander("🔧 Hyperparameter Tuning Details"):
-        st.write("**GridSearchCV Configuration:**")
-        st.write(f"- Number of parameter combinations tested: {len(grid_search.cv_results_['params'])}")
-        st.write(f"- Cross-validation folds: 3")
-        st.write(f"- Scoring metric: ROC AUC")
-        st.write(f"- Best cross-validation score: {grid_search.best_score_:.4f}")
-        
-        st.write("**Parameter Grid:**")
-        param_grid = {
-            'n_estimators': [100, 200, 300],
-            'max_depth': [3, 5, 7, -1],
-            'learning_rate': [0.01, 0.05, 0.1],
-            'num_leaves': [31, 50, 100],
-            'subsample': [0.8, 0.9, 1.0],
-            'colsample_bytree': [0.8, 0.9, 1.0],
-            'reg_alpha': [0, 0.1, 0.5],
-            'reg_lambda': [0, 0.1, 0.5]
-        }
-        st.json(param_grid)
-
-    # Get important features for prediction form
-    important_features = get_important_features(best_model, X_train.columns.tolist(), top_n=12)
+    # Get all features for prediction form
+    all_features = X_train.columns.tolist()
     
-    # Display important features info
-    with st.expander("📋 Important Features for Prediction"):
-        st.write("The following features are the most important for churn prediction:")
-        for i, feature in enumerate(important_features, 1):
+    # Display features info
+    with st.expander("📋 Features Used for Prediction"):
+        st.write("The following features are used for churn prediction:")
+        for i, feature in enumerate(all_features, 1):
             st.write(f"{i}. {feature}")
 
     # --- PREDICTION INTERFACE ---
     st.subheader("🎯 Make Predictions")
 
     st.markdown("""
-    Enter customer details below to predict churn probability. Only the most important features are shown.
+    Enter customer details below to predict churn probability. All available features are shown.
     """)
 
-    # Create input form with only important features
+    # Create input form with all available features
     with st.form("prediction_form"):
-        st.write("### Customer Details (Important Features Only)")
+        st.write("### Customer Details")
         
+        # Group features into categories for better organization
         input_data = {}
         
-        # Organize features into categories
-        st.write("#### 📊 Customer Information")
-        info_col1, info_col2 = st.columns(2)
+        # Service Usage & Demographics
+        st.write("#### 📊 Service Usage & Demographics")
+        demo_col1, demo_col2, demo_col3 = st.columns(3)
         
-        with info_col1:
-            if 'age' in important_features:
+        with demo_col1:
+            if 'monthly_charges' in all_features:
+                min_val = float(df['monthly_charges'].min())
+                max_val = float(df['monthly_charges'].max())
+                default_val = float(df['monthly_charges'].median())
+                input_data['monthly_charges'] = st.slider(
+                    "Monthly Charges",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+            
+            if 'tenure' in all_features:
+                min_val = float(df['tenure'].min())
+                max_val = float(df['tenure'].max())
+                default_val = float(df['tenure'].median())
+                input_data['tenure'] = st.slider(
+                    "Tenure",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+                
+        with demo_col2:
+            if 'age' in all_features:
                 min_val = float(df['age'].min())
                 max_val = float(df['age'].max())
                 default_val = float(df['age'].median())
@@ -384,75 +359,127 @@ with tab2:
                     value=default_val
                 )
             
-            if 'tenure' in important_features:
-                min_val = float(df['tenure'].min())
-                max_val = float(df['tenure'].max())
-                default_val = float(df['tenure'].median())
-                input_data['tenure'] = st.slider(
-                    "Tenure (months)",
+            if 'total_population' in all_features:
+                min_val = float(df['total_population'].min())
+                max_val = float(df['total_population'].max())
+                default_val = float(df['total_population'].median())
+                input_data['total_population'] = st.slider(
+                    "Total Population",
                     min_value=min_val,
                     max_value=max_val,
                     value=default_val
                 )
                 
-        with info_col2:
-            if 'monthly_charges' in important_features:
-                min_val = float(df['monthly_charges'].min())
-                max_val = float(df['monthly_charges'].max())
-                default_val = float(df['monthly_charges'].median())
-                input_data['monthly_charges'] = st.slider(
-                    "Monthly Charges",
+        with demo_col3:
+            if 'number_of_referrals' in all_features:
+                min_val = float(df['number_of_referrals'].min())
+                max_val = float(df['number_of_referrals'].max())
+                default_val = float(df['number_of_referrals'].median())
+                input_data['number_of_referrals'] = st.slider(
+                    "Number of Referrals",
                     min_value=min_val,
                     max_value=max_val,
-                    value=default_val,
-                    step=1.0
+                    value=default_val
+                )
+            
+            if 'cltv' in all_features:
+                min_val = float(df['cltv'].min())
+                max_val = float(df['cltv'].max())
+                default_val = float(df['cltv'].median())
+                input_data['cltv'] = st.slider(
+                    "CLTV",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
                 )
 
+        # Service Features
         st.write("#### 🔧 Service Features")
-        service_col1, service_col2 = st.columns(2)
+        service_col1, service_col2, service_col3 = st.columns(3)
         
         with service_col1:
-            # Binary features
-            binary_features = [f for f in important_features if f in ['online_security', 'online_backup', 'device_protection', 
-                                                                     'premium_tech_support', 'streaming_tv', 'streaming_movies',
-                                                                     'paperless_billing', 'multiple_lines', 'unlimited_data']]
+            if 'avg_monthly_gb_download' in all_features:
+                min_val = float(df['avg_monthly_gb_download'].min())
+                max_val = float(df['avg_monthly_gb_download'].max())
+                default_val = float(df['avg_monthly_gb_download'].median())
+                input_data['avg_monthly_gb_download'] = st.slider(
+                    "Avg Monthly GB Download",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
             
-            for feature in binary_features[:4]:  # Show first 4
-                input_data[feature] = st.selectbox(
-                    feature.replace('_', ' ').title(),
+            if 'satisfaction_score' in all_features:
+                min_val = float(df['satisfaction_score'].min())
+                max_val = float(df['satisfaction_score'].max())
+                default_val = float(df['satisfaction_score'].median())
+                input_data['satisfaction_score'] = st.slider(
+                    "Satisfaction Score",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+                
+        with service_col2:
+            if 'premium_tech_support' in all_features:
+                input_data['premium_tech_support'] = st.selectbox(
+                    "Premium Tech Support",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+            
+            if 'dependents' in all_features:
+                input_data['dependents'] = st.selectbox(
+                    "Has Dependents",
                     options=[0, 1],
                     format_func=lambda x: "No" if x == 0 else "Yes"
                 )
                 
-        with service_col2:
-            for feature in binary_features[4:8]:  # Show next 4
-                if feature in important_features:
-                    input_data[feature] = st.selectbox(
-                        feature.replace('_', ' ').title(),
-                        options=[0, 1],
-                        format_func=lambda x: "No" if x == 0 else "Yes"
+        with service_col3:
+            if 'avg_monthly_long_distance_charges' in all_features:
+                min_val = float(df['avg_monthly_long_distance_charges'].min())
+                max_val = float(df['avg_monthly_long_distance_charges'].max())
+                default_val = float(df['avg_monthly_long_distance_charges'].median())
+                input_data['avg_monthly_long_distance_charges'] = st.slider(
+                    "Avg Monthly Long Distance Charges",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=default_val
+                )
+            
+            if 'online_security' in all_features:
+                input_data['online_security'] = st.selectbox(
+                    "Online Security",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
                 )
 
-        st.write("#### 📞 Contract & Payment")
+        # Contract Features
+        st.write("#### 📝 Contract Features")
         contract_col1, contract_col2 = st.columns(2)
         
         with contract_col1:
-            contract_features = [f for f in important_features if 'contract' in f or 'payment' in f]
-            for feature in contract_features[:2]:
-                input_data[feature] = st.selectbox(
-                    feature.replace('_', ' ').title(),
+            if 'contract_Two Year' in all_features:
+                input_data['contract_Two Year'] = st.selectbox(
+                    "Two Year Contract",
                     options=[0, 1],
                     format_func=lambda x: "No" if x == 0 else "Yes"
                 )
                 
         with contract_col2:
-            for feature in contract_features[2:4]:
-                if feature in important_features:
-                    input_data[feature] = st.selectbox(
-                        feature.replace('_', ' ').title(),
-                        options=[0, 1],
-                        format_func=lambda x: "No" if x == 0 else "Yes"
-                    )
+            if 'contract_One Year' in all_features:
+                input_data['contract_One Year'] = st.selectbox(
+                    "One Year Contract",
+                    options=[0, 1],
+                    format_func=lambda x: "No" if x == 0 else "Yes"
+                )
+
+        if 'online_backup' in all_features:
+            input_data['online_backup'] = st.selectbox(
+                "Online Backup",
+                options=[0, 1],
+                format_func=lambda x: "No" if x == 0 else "Yes"
+            )
 
         submitted = st.form_submit_button("Predict Churn")
 
@@ -464,7 +491,7 @@ with tab2:
             for feature in X_train.columns:
                 complete_input[feature] = float(X_train[feature].median())
             
-            # Update with user input for important features
+            # Update with user input for available features
             for feature in input_data:
                 if feature in complete_input:
                     complete_input[feature] = input_data[feature]
@@ -534,22 +561,6 @@ with tab2:
                            columns=['Predicted Not Churn', 'Predicted Churn'])
         st.dataframe(cm_df)
 
-    # Feature Importance
-    st.subheader("🔍 Feature Importance")
-    feature_importance = pd.DataFrame({
-        'feature': X_train.columns,
-        'importance': best_model.feature_importances_
-    }).sort_values('importance', ascending=False)
-
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.barplot(data=feature_importance.head(12), x='importance', y='feature', ax=ax)
-        ax.set_title('Top 12 Feature Importance')
-        ax.set_xlabel('Importance Score')
-        st.pyplot(fig)
-    else:
-        # Fallback: display as bar chart using streamlit
-        st.bar_chart(feature_importance.head(12).set_index('feature'))
 
     # Classification Report
     st.subheader("📋 Classification Report")
@@ -557,10 +568,5 @@ with tab2:
     clf_report_df = pd.DataFrame(clf_report).transpose()
     st.dataframe(clf_report_df)
 
-    # Add retrain button
-    if st.button("🔄 Retrain Model with Hyperparameter Tuning"):
-        st.session_state.model_trained = False
-        st.rerun()
-
 st.markdown("---")
-st.write("Customer Churn Analysis & Prediction Dashboard | Model: LightGBM with Hyperparameter Tuning + SMOTE")
+st.write("Customer Churn Analysis & Prediction Dashboard | Model: LightGBM with SMOTE")
