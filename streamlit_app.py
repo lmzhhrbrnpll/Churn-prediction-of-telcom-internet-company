@@ -31,7 +31,7 @@ st.set_page_config(
 def load_data():
     """Loads the preprocessed customer churn dataset."""
     try:
-        df = pd.read_csv("train_data.csv")
+        df = pd.read_csv("Data/train_data.csv")
         st.success(f"Data berhasil dimuat: {df.shape[0]} baris, {df.shape[1]} kolom")
         return df
     except Exception as e:
