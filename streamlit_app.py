@@ -43,8 +43,21 @@ df = load_data()
 # --- DATA PREPROCESSING FOR MODEL ---
 @st.cache_data
 def preprocess_data(df):
-    """Preprocess data for machine learning model - simplified for clean data."""
+    """Preprocess data for machine learning model - handle categorical variables."""
     df_ml = df.copy()
+
+    # Convert categorical variables to numeric
+    categorical_columns = ['premium_tech_support', 'dependents']
+    
+    for col in categorical_columns:
+        if col in df_ml.columns:
+            df_ml[col] = df_ml[col].map({'Yes': 1, 'No': 0})
+    
+    # Ensure all columns are numeric
+    non_numeric_cols = df_ml.select_dtypes(include=['object']).columns
+    if len(non_numeric_cols) > 0:
+        st.warning(f"Kolom non-numerik ditemukan dan akan dihapus: {list(non_numeric_cols)}")
+        df_ml = df_ml.drop(columns=non_numeric_cols)
 
     # Handle missing values if any
     if df_ml.isnull().sum().sum() > 0:
@@ -237,6 +250,7 @@ with tab2:
         st.write("**Data Shape:**", df_ml.shape)
         st.write("**Class Distribution:**")
         st.write(df_ml['churn_value'].value_counts())
+        st.write("**Features Used:**", list(df_ml.columns))
 
     # Train model with progress
     progress_bar = st.progress(0)
@@ -251,322 +265,280 @@ with tab2:
     status_text.text("Training LightGBM model with optimized parameters...")
     
     # Train model
-    (best_model, scaler, smote, X_train, X_test, y_train, y_test,
-     y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model_optimized(df_ml)
-    
-    progress_bar.progress(80)
-    status_text.text("Making predictions and calculating metrics...")
-    progress_bar.progress(100)
-    status_text.text("")
-
-    st.success("Model training completed!")
-
-    # Display model performance
-    st.subheader("📊 Model Performance")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Accuracy", f"{metrics['accuracy']:.3f}")
-
-    with col2:
-        st.metric("AUC Score", f"{metrics['auc_score']:.3f}")
-
-    with col3:
-        st.metric("Precision", f"{metrics['precision']:.3f}")
-
-    with col4:
-        st.metric("Recall", f"{metrics['recall']:.3f}")
-
-    # Additional metrics
-    col5, col6, col7, col8 = st.columns(4)
-
-    with col5:
-        st.metric("F1-Score", f"{metrics['f1_score']:.3f}")
-
-    with col6:
-        st.metric("Training Samples", X_train.shape[0])
-
-    with col7:
-        st.metric("Test Samples", X_test.shape[0])
-
-    with col8:
-        st.metric("Features", X_train.shape[1])
-
-    # Display best parameters
-    st.subheader("⚙️ Optimized Hyperparameters")
-    st.json(best_params)
-
-    # Get all features for prediction form
-    all_features = X_train.columns.tolist()
-    
-    # Display features info
-    with st.expander("📋 Features Used for Prediction"):
-        st.write("The following features are used for churn prediction:")
-        for i, feature in enumerate(all_features, 1):
-            st.write(f"{i}. {feature}")
-
-    # --- PREDICTION INTERFACE ---
-    st.subheader("🎯 Make Predictions")
-
-    st.markdown("""
-    Enter customer details below to predict churn probability. All available features are shown.
-    """)
-
-    # Create input form with all available features
-    with st.form("prediction_form"):
-        st.write("### Customer Details")
+    try:
+        (best_model, scaler, smote, X_train, X_test, y_train, y_test,
+         y_pred, y_pred_proba, best_params, metrics) = train_lightgbm_model_optimized(df_ml)
         
-        # Group features into categories for better organization
-        input_data = {}
+        progress_bar.progress(80)
+        status_text.text("Making predictions and calculating metrics...")
+        progress_bar.progress(100)
+        status_text.text("")
+
+        st.success("Model training completed!")
+
+        # Display model performance
+        st.subheader("📊 Model Performance")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Accuracy", f"{metrics['accuracy']:.3f}")
+
+        with col2:
+            st.metric("AUC Score", f"{metrics['auc_score']:.3f}")
+
+        with col3:
+            st.metric("Precision", f"{metrics['precision']:.3f}")
+
+        with col4:
+            st.metric("Recall", f"{metrics['recall']:.3f}")
+
+        # Additional metrics
+        col5, col6, col7, col8 = st.columns(4)
+
+        with col5:
+            st.metric("F1-Score", f"{metrics['f1_score']:.3f}")
+
+        with col6:
+            st.metric("Training Samples", X_train.shape[0])
+
+        with col7:
+            st.metric("Test Samples", X_test.shape[0])
+
+        with col8:
+            st.metric("Features", X_train.shape[1])
+
+        # Display best parameters
+        st.subheader("⚙️ Optimized Hyperparameters")
+        st.json(best_params)
+
+        # Get all features for prediction form
+        all_features = X_train.columns.tolist()
         
-        # Service Usage & Demographics
-        st.write("#### 📊 Service Usage & Demographics")
-        demo_col1, demo_col2, demo_col3 = st.columns(3)
-        
-        with demo_col1:
-            if 'monthly_charges' in all_features:
-                min_val = float(df['monthly_charges'].min())
-                max_val = float(df['monthly_charges'].max())
-                default_val = float(df['monthly_charges'].median())
-                input_data['monthly_charges'] = st.slider(
-                    "Monthly Charges",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
+        # Display features info
+        with st.expander("📋 Features Used for Prediction"):
+            st.write("The following features are used for churn prediction:")
+            for i, feature in enumerate(all_features, 1):
+                st.write(f"{i}. {feature}")
+
+        # --- PREDICTION INTERFACE ---
+        st.subheader("🎯 Make Predictions")
+
+        st.markdown("""
+        Enter customer details below to predict churn probability. All available features are shown.
+        """)
+
+        # Create input form with all available features
+        with st.form("prediction_form"):
+            st.write("### Customer Details")
             
-            if 'tenure' in all_features:
-                min_val = float(df['tenure'].min())
-                max_val = float(df['tenure'].max())
-                default_val = float(df['tenure'].median())
-                input_data['tenure'] = st.slider(
-                    "Tenure",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
+            # Group features into categories for better organization
+            input_data = {}
+            
+            # Service Usage & Demographics
+            st.write("#### 📊 Service Usage & Demographics")
+            demo_col1, demo_col2, demo_col3 = st.columns(3)
+            
+            with demo_col1:
+                if 'monthly_charges' in all_features:
+                    min_val = float(df['monthly_charges'].min())
+                    max_val = float(df['monthly_charges'].max())
+                    default_val = float(df['monthly_charges'].median())
+                    input_data['monthly_charges'] = st.slider(
+                        "Monthly Charges",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
                 
-        with demo_col2:
-            if 'age' in all_features:
-                min_val = float(df['age'].min())
-                max_val = float(df['age'].max())
-                default_val = float(df['age'].median())
-                input_data['age'] = st.slider(
-                    "Age",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-            
-            if 'total_population' in all_features:
-                min_val = float(df['total_population'].min())
-                max_val = float(df['total_population'].max())
-                default_val = float(df['total_population'].median())
-                input_data['total_population'] = st.slider(
-                    "Total Population",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
+                if 'tenure' in all_features:
+                    min_val = float(df['tenure'].min())
+                    max_val = float(df['tenure'].max())
+                    default_val = float(df['tenure'].median())
+                    input_data['tenure'] = st.slider(
+                        "Tenure",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
+                    
+            with demo_col2:
+                if 'age' in all_features:
+                    min_val = float(df['age'].min())
+                    max_val = float(df['age'].max())
+                    default_val = float(df['age'].median())
+                    input_data['age'] = st.slider(
+                        "Age",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
                 
-        with demo_col3:
-            if 'number_of_referrals' in all_features:
-                min_val = float(df['number_of_referrals'].min())
-                max_val = float(df['number_of_referrals'].max())
-                default_val = float(df['number_of_referrals'].median())
-                input_data['number_of_referrals'] = st.slider(
-                    "Number of Referrals",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-            
-            if 'cltv' in all_features:
-                min_val = float(df['cltv'].min())
-                max_val = float(df['cltv'].max())
-                default_val = float(df['cltv'].median())
-                input_data['cltv'] = st.slider(
-                    "CLTV",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-
-        # Service Features
-        st.write("#### 🔧 Service Features")
-        service_col1, service_col2, service_col3 = st.columns(3)
-        
-        with service_col1:
-            if 'avg_monthly_gb_download' in all_features:
-                min_val = float(df['avg_monthly_gb_download'].min())
-                max_val = float(df['avg_monthly_gb_download'].max())
-                default_val = float(df['avg_monthly_gb_download'].median())
-                input_data['avg_monthly_gb_download'] = st.slider(
-                    "Avg Monthly GB Download",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-            
-            if 'satisfaction_score' in all_features:
-                min_val = float(df['satisfaction_score'].min())
-                max_val = float(df['satisfaction_score'].max())
-                default_val = float(df['satisfaction_score'].median())
-                input_data['satisfaction_score'] = st.slider(
-                    "Satisfaction Score",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
+                if 'total_population' in all_features:
+                    min_val = float(df['total_population'].min())
+                    max_val = float(df['total_population'].max())
+                    default_val = float(df['total_population'].median())
+                    input_data['total_population'] = st.slider(
+                        "Total Population",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
+                    
+            with demo_col3:
+                if 'number_of_referrals' in all_features:
+                    min_val = float(df['number_of_referrals'].min())
+                    max_val = float(df['number_of_referrals'].max())
+                    default_val = float(df['number_of_referrals'].median())
+                    input_data['number_of_referrals'] = st.slider(
+                        "Number of Referrals",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
                 
-        with service_col2:
-            if 'premium_tech_support' in all_features:
-                input_data['premium_tech_support'] = st.selectbox(
-                    "Premium Tech Support",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
+                if 'cltv' in all_features:
+                    min_val = float(df['cltv'].min())
+                    max_val = float(df['cltv'].max())
+                    default_val = float(df['cltv'].median())
+                    input_data['cltv'] = st.slider(
+                        "CLTV",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
+
+            # Service Features
+            st.write("#### 🔧 Service Features")
+            service_col1, service_col2, service_col3 = st.columns(3)
             
-            if 'dependents' in all_features:
-                input_data['dependents'] = st.selectbox(
-                    "Has Dependents",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
+            with service_col1:
+                if 'avg_monthly_gb_download' in all_features:
+                    min_val = float(df['avg_monthly_gb_download'].min())
+                    max_val = float(df['avg_monthly_gb_download'].max())
+                    default_val = float(df['avg_monthly_gb_download'].median())
+                    input_data['avg_monthly_gb_download'] = st.slider(
+                        "Avg Monthly GB Download",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
                 
-        with service_col3:
-            if 'avg_monthly_long_distance_charges' in all_features:
-                min_val = float(df['avg_monthly_long_distance_charges'].min())
-                max_val = float(df['avg_monthly_long_distance_charges'].max())
-                default_val = float(df['avg_monthly_long_distance_charges'].median())
-                input_data['avg_monthly_long_distance_charges'] = st.slider(
-                    "Avg Monthly Long Distance Charges",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=default_val
-                )
-            
-            if 'online_security' in all_features:
-                input_data['online_security'] = st.selectbox(
-                    "Online Security",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
-
-        # Contract Features
-        st.write("#### 📝 Contract Features")
-        contract_col1, contract_col2 = st.columns(2)
-        
-        with contract_col1:
-            if 'contract_Two Year' in all_features:
-                input_data['contract_Two Year'] = st.selectbox(
-                    "Two Year Contract",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
+                if 'satisfaction_score' in all_features:
+                    min_val = float(df['satisfaction_score'].min())
+                    max_val = float(df['satisfaction_score'].max())
+                    default_val = float(df['satisfaction_score'].median())
+                    input_data['satisfaction_score'] = st.slider(
+                        "Satisfaction Score",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=default_val
+                    )
+                    
+            with service_col2:
+                if 'premium_tech_support' in all_features:
+                    input_data['premium_tech_support'] = st.selectbox(
+                        "Premium Tech Support",
+                        options=[0, 1],
+                        format_func=lambda x: "No" if x == 0 else "Yes"
+                    )
                 
-        with contract_col2:
-            if 'contract_One Year' in all_features:
-                input_data['contract_One Year'] = st.selectbox(
-                    "One Year Contract",
-                    options=[0, 1],
-                    format_func=lambda x: "No" if x == 0 else "Yes"
-                )
+                if 'dependents' in all_features:
+                    input_data['dependents'] = st.selectbox(
+                        "Has Dependents",
+                        options=[0, 1],
+                        format_func=lambda x: "No" if x == 0 else "Yes"
+                    )
 
-        if 'online_backup' in all_features:
-            input_data['online_backup'] = st.selectbox(
-                "Online Backup",
-                options=[0, 1],
-                format_func=lambda x: "No" if x == 0 else "Yes"
-            )
+            submitted = st.form_submit_button("Predict Churn")
 
-        submitted = st.form_submit_button("Predict Churn")
+            if submitted:
+                # Create complete input DataFrame with all features
+                complete_input = {}
+                
+                # Fill all features with median values first
+                for feature in X_train.columns:
+                    complete_input[feature] = float(X_train[feature].median())
+                
+                # Update with user input for available features
+                for feature in input_data:
+                    if feature in complete_input:
+                        complete_input[feature] = input_data[feature]
+                
+                # Create DataFrame
+                input_df = pd.DataFrame([complete_input])
+                
+                # Ensure correct column order
+                input_df = input_df[X_train.columns]
 
-        if submitted:
-            # Create complete input DataFrame with all features
-            complete_input = {}
-            
-            # Fill all features with median values first
-            for feature in X_train.columns:
-                complete_input[feature] = float(X_train[feature].median())
-            
-            # Update with user input for available features
-            for feature in input_data:
-                if feature in complete_input:
-                    complete_input[feature] = input_data[feature]
-            
-            # Create DataFrame
-            input_df = pd.DataFrame([complete_input])
-            
-            # Ensure correct column order
-            input_df = input_df[X_train.columns]
+                # Scale the input
+                input_scaled = scaler.transform(input_df)
 
-            # Scale the input
-            input_scaled = scaler.transform(input_df)
+                # Make prediction
+                churn_probability = best_model.predict_proba(input_scaled)[0, 1]
+                churn_prediction = best_model.predict(input_scaled)[0]
 
-            # Make prediction
-            churn_probability = best_model.predict_proba(input_scaled)[0, 1]
-            churn_prediction = best_model.predict(input_scaled)[0]
+                # Display results
+                st.subheader("🎯 Prediction Results")
 
-            # Display results
-            st.subheader("🎯 Prediction Results")
+                result_col1, result_col2 = st.columns(2)
 
-            result_col1, result_col2 = st.columns(2)
+                with result_col1:
+                    st.metric("Churn Probability", f"{churn_probability:.3f}")
+                    st.metric("Confidence", f"{max(churn_probability, 1-churn_probability):.3f}")
 
-            with result_col1:
-                st.metric("Churn Probability", f"{churn_probability:.3f}")
-                st.metric("Confidence", f"{max(churn_probability, 1-churn_probability):.3f}")
+                with result_col2:
+                    if churn_prediction == 1:
+                        st.error("Prediction: **HIGH RISK OF CHURN** ⚠️")
+                        st.write("This customer is likely to churn. Consider retention strategies.")
+                    else:
+                        st.success("Prediction: **LOW RISK OF CHURN** ✅")
+                        st.write("This customer is likely to stay.")
 
-            with result_col2:
-                if churn_prediction == 1:
-                    st.error("Prediction: **HIGH RISK OF CHURN** ⚠️")
-                    st.write("This customer is likely to churn. Consider retention strategies.")
-                else:
-                    st.success("Prediction: **LOW RISK OF CHURN** ✅")
-                    st.write("This customer is likely to stay.")
+                # Probability gauge
+                st.write("**Churn Probability Gauge:**")
+                st.progress(float(churn_probability))
+                st.caption(f"Churn likelihood: {churn_probability*100:.1f}%")
+                
+                # Show interpretation
+                with st.expander("💡 Interpretation Guide"):
+                    st.write("""
+                    **Churn Probability Interpretation:**
+                    - **0-30%**: Low risk - Standard customer engagement
+                    - **30-60%**: Medium risk - Monitor and proactive engagement
+                    - **60-80%**: High risk - Implement retention strategies
+                    - **80-100%**: Very high risk - Immediate intervention needed
+                    """)
 
-            # Probability gauge
-            st.write("**Churn Probability Gauge:**")
-            st.progress(float(churn_probability))
-            st.caption(f"Churn likelihood: {churn_probability*100:.1f}%")
-            
-            # Show interpretation
-            with st.expander("💡 Interpretation Guide"):
-                st.write("""
-                **Churn Probability Interpretation:**
-                - **0-30%**: Low risk - Standard customer engagement
-                - **30-60%**: Medium risk - Monitor and proactive engagement
-                - **60-80%**: High risk - Implement retention strategies
-                - **80-100%**: Very high risk - Immediate intervention needed
-                """)
+        # Confusion Matrix
+        st.subheader("📈 Confusion Matrix")
+        if matplotlib_available:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            cm = confusion_matrix(y_test, y_pred)
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                        xticklabels=['Not Churn', 'Churn'],
+                        yticklabels=['Not Churn', 'Churn'])
+            ax.set_xlabel('Predicted')
+            ax.set_ylabel('Actual')
+            ax.set_title('Confusion Matrix')
+            st.pyplot(fig)
+        else:
+            # Fallback: display confusion matrix as table
+            cm = confusion_matrix(y_test, y_pred)
+            cm_df = pd.DataFrame(cm,
+                               index=['Actual Not Churn', 'Actual Churn'],
+                               columns=['Predicted Not Churn', 'Predicted Churn'])
+            st.dataframe(cm_df)
 
-    # Confusion Matrix
-    st.subheader("📈 Confusion Matrix")
-    if matplotlib_available:
-        fig, ax = plt.subplots(figsize=(8, 6))
-        cm = confusion_matrix(y_test, y_pred)
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
-                    xticklabels=['Not Churn', 'Churn'],
-                    yticklabels=['Not Churn', 'Churn'])
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('Actual')
-        ax.set_title('Confusion Matrix')
-        st.pyplot(fig)
-    else:
-        # Fallback: display confusion matrix as table
-        cm = confusion_matrix(y_test, y_pred)
-        cm_df = pd.DataFrame(cm,
-                           index=['Actual Not Churn', 'Actual Churn'],
-                           columns=['Predicted Not Churn', 'Predicted Churn'])
-        st.dataframe(cm_df)
+        # Classification Report
+        st.subheader("📋 Classification Report")
+        clf_report = classification_report(y_test, y_pred, output_dict=True)
+        clf_report_df = pd.DataFrame(clf_report).transpose()
+        st.dataframe(clf_report_df)
 
-
-    # Classification Report
-    st.subheader("📋 Classification Report")
-    clf_report = classification_report(y_test, y_pred, output_dict=True)
-    clf_report_df = pd.DataFrame(clf_report).transpose()
-    st.dataframe(clf_report_df)
+    except Exception as e:
+        st.error(f"Error during model training: {str(e)}")
+        st.info("Pastikan semua kolom dalam dataset adalah numerik atau sudah di-encode dengan benar.")
 
 st.markdown("---")
 st.write("Customer Churn Analysis & Prediction Dashboard | Model: LightGBM with SMOTE")
