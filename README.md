@@ -77,5 +77,5 @@ Multiple data sources were integrated:
 
 ## 📞 Contact
 **Lamzahhera Berinpalla**
-- LinkedIn: [[Lamzahhera Berinpalla]](https://www.linkedin.com/in/lamzahheraberinpalla/)
+- LinkedIn: [Lamzahhera Berinpalla](https://www.linkedin.com/in/lamzahheraberinpalla/)
 - Email: lamzahheraberin@gmail.com
